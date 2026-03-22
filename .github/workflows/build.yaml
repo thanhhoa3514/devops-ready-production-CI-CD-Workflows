@@ -58,7 +58,7 @@ jobs:
           images: docker.io/${{ env.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
-            type=sha,prefix=sha-
+            type=sha,prefix=sha-,format=long
             type=ref,event=tag
 
       - name: Build and push image
