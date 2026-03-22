@@ -1,27 +1,70 @@
-name: Build Pipeline
+name: Build And Push Docker Image
 
 on:
-  push:
-    branches: ['main', 'dev', 'feature/', 'test']
-  workflow_dispatch:
+  workflow_run:
+    workflows: ["Lint"]
+    types: [completed]
+    branches:
+      - main
+
+env:
+  IMAGE_NAME: devops-tutorial
+  DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
 
 jobs:
-  build:
-    need: test.yaml
+  build-and-push:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
 
-      - name: Login to GHCR
+      - name: Validate Docker Hub username variable
+        run: |
+          if [ -z "${DOCKERHUB_USERNAME}" ]; then
+            echo "Repository variable DOCKERHUB_USERNAME is required."
+            exit 1
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push image on DockerHub
-        uses
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: docker.io/${{ env.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=sha-
+            type=ref,event=tag
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

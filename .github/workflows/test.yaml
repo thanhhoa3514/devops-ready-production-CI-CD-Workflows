@@ -1,31 +1,39 @@
-name: Test Syntax
+name: Lint
 
 on:
-  branches: ['main', 'dev', 'test', 'hotfix', 'feature/']
+  pull_request:
+  push:
+    branches:
+      - main
+      - dev
+      - test
+      - hotfix/**
+      - feature/**
   workflow_dispatch:
 
 jobs:
-  test:
+  lint:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Nestjs
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22.0
-          cache: pnpm
-      - name: Install pnpm
-        runs: npm install -g pnpm
+          node-version: '22'
+          cache: 'pnpm'
 
-      - name: Install Dependencies
-        runs: pnpm install
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
 
-      - name: Check Lint and Type
-        run: npx tsc --noEmit
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
-      - name: Run All Test Case
-        run: npm run test
+      - name: ESLint
+        run: pnpm exec eslint "{src,apps,libs,test}/**/*.ts"
 
-      - name: Run all test case and see the percent of coverage
-        run: npm run test:cov
+      - name: TypeScript check
+        run: pnpm exec tsc --noEmit

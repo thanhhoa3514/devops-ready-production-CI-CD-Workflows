@@ -1,98 +1,137 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Ready Production CI/CD Workflow (NestJS + Docker Hub + VPS)
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+This repository is configured for a production deployment flow:
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+1. Run tests in GitHub Actions.
+2. Build Docker image and push to Docker Hub.
+3. Deploy on VPS by pulling image and recreating Docker Compose services.
 
-## Description
+## Architecture
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+- App image: `docker.io/<DOCKERHUB_USERNAME>/devops-tutorial:<tag>`
+- Production compose file: `docker-compose.prod.yml`
+- VPS deploy script: `ops/deploy.sh`
+- CI/CD workflows:
+  - `.github/workflows/test.yaml`
+  - `.github/workflows/build.yaml`
+  - `.github/workflows/deploy.yaml`
 
-## Project setup
+## Local Development
 
 ```bash
-$ pnpm install
+pnpm install
+pnpm run start:dev
 ```
 
-## Compile and run the project
+## Build and Run Locally with Docker
 
 ```bash
-# development
-$ pnpm run start
-
-# watch mode
-$ pnpm run start:dev
-
-# production mode
-$ pnpm run start:prod
+docker build -t devops-tutorial:local .
+docker run --rm -p 3000:3000 devops-tutorial:local
 ```
 
-## Run tests
+## VPS One-Time Setup
+
+Run once on VPS:
 
 ```bash
-# unit tests
-$ pnpm run test
-
-# e2e tests
-$ pnpm run test:e2e
-
-# test coverage
-$ pnpm run test:cov
+sudo apt-get update
+sudo apt-get install -y docker.io docker-compose-plugin git
+sudo usermod -aG docker "$USER"
+newgrp docker
 ```
 
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+Clone project and create production env file:
 
 ```bash
-$ pnpm install -g @nestjs/mau
-$ mau deploy
+git clone <your-repo-url>
+cd devops-ready-production-CI-CD-Workflows
+cp ops/.env.production.example ops/.env.production
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+Update `ops/.env.production`:
 
-## Resources
+```dotenv
+DOCKERHUB_USERNAME=your-dockerhub-username
+IMAGE_TAG=latest
+APP_PORT=3000
+```
 
-Check out a few resources that may come in handy when working with NestJS:
+Manual deploy on VPS:
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+```bash
+./ops/deploy.sh
+```
 
-## Support
+## GitHub Repository Configuration
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+Set repository **Variables**:
 
-## Stay in touch
+- `DOCKERHUB_USERNAME`: your Docker Hub username
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+Set repository **Secrets**:
 
-## License
+- `DOCKERHUB_TOKEN`: Docker Hub access token
+- `VPS_HOST`: VPS host/IP
+- `VPS_USER`: SSH username
+- `VPS_SSH_KEY`: private key for SSH login
+- `VPS_PORT`: SSH port (optional, default `22`)
+- `VPS_APP_DIR`: absolute path to project on VPS
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+## CI/CD Behavior
+
+### 1) Test Workflow (`test.yaml`)
+
+Runs on push/PR and validates:
+
+- TypeScript type check
+- Unit tests
+- Coverage
+
+### 2) Build Workflow (`build.yaml`)
+
+Runs on `main`, tags (`v*.*.*`), or manual dispatch.
+
+Actions:
+
+- Run tests
+- Build Docker image
+- Push tags to Docker Hub:
+  - `latest` (default branch)
+  - `sha-<commit>`
+  - `vX.Y.Z` (when git tag is pushed)
+
+### 3) Deploy Workflow (`deploy.yaml`)
+
+Runs automatically when build workflow succeeds, or manually with an `image_tag` input.
+
+Actions:
+
+- SSH into VPS
+- `git pull --ff-only`
+- Update `ops/.env.production` with `IMAGE_TAG` and `DOCKERHUB_USERNAME`
+- Run `./ops/deploy.sh`:
+  - `docker compose pull`
+  - `docker compose up -d --remove-orphans --force-recreate`
+  - health check wait
+
+## Deployment Commands (Manual)
+
+Deploy latest tag:
+
+```bash
+sed -i 's/^IMAGE_TAG=.*/IMAGE_TAG=latest/' ops/.env.production
+./ops/deploy.sh
+```
+
+Deploy specific commit image tag:
+
+```bash
+sed -i 's/^IMAGE_TAG=.*/IMAGE_TAG=sha-<commit_sha>/' ops/.env.production
+./ops/deploy.sh
+```
+
+## Notes
+
+- Keep `ops/.env.production` only on VPS. Do not commit real secrets.
+- If using a reverse proxy (Nginx/Caddy), map external 80/443 to `APP_PORT`.
