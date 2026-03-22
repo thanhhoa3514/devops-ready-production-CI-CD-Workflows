@@ -1,0 +1,31 @@
+name: Test Syntax
+
+on:
+  branches: ['main', 'dev', 'test', 'hotfix', 'feature/']
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Nestjs
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.0
+          cache: pnpm
+      - name: Install pnpm
+        runs: npm install -g pnpm
+
+      - name: Install Dependencies
+        runs: pnpm install
+
+      - name: Check Lint and Type
+        run: npx tsc --noEmit
+
+      - name: Run All Test Case
+        run: npm run test
+
+      - name: Run all test case and see the percent of coverage
+        run: npm run test:cov
