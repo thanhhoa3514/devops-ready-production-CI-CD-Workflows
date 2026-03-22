@@ -41,10 +41,30 @@ jobs:
           envs: DEPLOY_IMAGE_TAG,DOCKERHUB_USERNAME
           script: |
             set -euo pipefail
-            cd "${{ secrets.VPS_APP_DIR }}"
+            APP_DIR="${{ secrets.VPS_APP_DIR }}"
+            REPO_URL="https://github.com/${{ github.repository }}.git"
+            BRANCH="${{ github.event.workflow_run.head_branch }}"
 
+            if ! command -v git >/dev/null 2>&1; then
+              echo "git is not installed on the VPS."
+              exit 1
+            fi
+
+            mkdir -p "$(dirname "$APP_DIR")"
+
+            if [ ! -d "$APP_DIR/.git" ]; then
+              if [ -d "$APP_DIR" ] && [ -n "$(ls -A "$APP_DIR" 2>/dev/null)" ]; then
+                echo "VPS_APP_DIR exists but is not a git repository: $APP_DIR"
+                echo "Please use an empty directory or a valid cloned repository path."
+                exit 1
+              fi
+              echo "First deploy detected. Cloning repository to $APP_DIR"
+              git clone --branch "$BRANCH" --single-branch "$REPO_URL" "$APP_DIR"
+            fi
+
+            cd "$APP_DIR"
             git fetch --all --prune
-            git pull --ff-only
+            git pull --ff-only origin "$BRANCH"
 
             mkdir -p ops
             if [ ! -f ops/.env.production ]; then
