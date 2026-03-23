@@ -1,0 +1,63 @@
+name: Notify on Discord
+
+on:
+  workflow_run:
+    workflows: ["Deploy To VPS"]
+    types: [completed]
+    branches:
+      - main
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate Discord webhook secret
+        run: |
+          if [ -z "${{ secrets.DISCORD_WEBHOOK_URL }}" ]; then
+            echo "Repository secret DISCORD_WEBHOOK_URL is required."
+            exit 1
+          fi
+
+      - name: Send Discord notification
+        env:
+          STATUS: ${{ github.event.workflow_run.conclusion }}
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ github.event.workflow_run.head_branch }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          set -euo pipefail
+
+          if [ "$STATUS" = "success" ]; then
+            STATUS_TEXT="SUCCESS"
+            COLOR=3066993
+          else
+            STATUS_TEXT="$(echo "$STATUS" | tr '[:lower:]' '[:upper:]')"
+            COLOR=15158332
+          fi
+
+          SHORT_SHA="$(echo "$SHA" | cut -c1-7)"
+
+          PAYLOAD=$(cat <<EOF
+          {
+            "embeds": [
+              {
+                "title": "Deploy To VPS: ${STATUS_TEXT}",
+                "color": ${COLOR},
+                "fields": [
+                  { "name": "Repository", "value": "${REPO}", "inline": true },
+                  { "name": "Branch", "value": "${BRANCH}", "inline": true },
+                  { "name": "Commit", "value": "${SHORT_SHA}", "inline": true },
+                  { "name": "Run", "value": "${RUN_URL}", "inline": false }
+                ]
+              }
+            ]
+          }
+          EOF
+          )
+
+          curl -sS -X POST \
+            -H "Content-Type: application/json" \
+            --data "$PAYLOAD" \
+            "$WEBHOOK_URL"
