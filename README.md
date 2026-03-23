@@ -1,5 +1,7 @@
 # Ready Production CI/CD Workflow (NestJS + Docker Hub + VPS)
 
+![CI/CD Workflow Diagram](assets/image.png)
+
 This repository is configured for a production deployment flow:
 
 1. Run tests in GitHub Actions.
