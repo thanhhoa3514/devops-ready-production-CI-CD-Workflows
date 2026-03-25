@@ -1,0 +1,98 @@
+name: Deploy To Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: Docker image tag to promote to production (sha-<commit_sha> or vX.Y.Z)
+        required: true
+        type: string
+
+env:
+  DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+
+    steps:
+      - name: Validate deploy inputs, secrets, and variables
+        run: |
+          IMAGE_TAG="${{ inputs.image_tag }}"
+          test -n "$IMAGE_TAG"
+          if [[ ! "$IMAGE_TAG" =~ ^sha-[0-9a-fA-F]{7,64}$ && ! "$IMAGE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Production deploy only accepts sha-* or vX.Y.Z tags."
+            exit 1
+          fi
+          test -n "${{ secrets.VPS_HOST }}"
+          test -n "${{ secrets.VPS_USER }}"
+          test -n "${{ secrets.VPS_SSH_KEY }}"
+          test -n "${{ secrets.VPS_APP_DIR }}"
+          test -n "${{ env.DOCKERHUB_USERNAME }}"
+
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.2
+        env:
+          DEPLOY_ENV: production
+          DEPLOY_GIT_REF: main
+          DEPLOY_IMAGE_TAG: ${{ inputs.image_tag }}
+          DOCKERHUB_USERNAME: ${{ env.DOCKERHUB_USERNAME }}
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || '22' }}
+          envs: DEPLOY_ENV,DEPLOY_GIT_REF,DEPLOY_IMAGE_TAG,DOCKERHUB_USERNAME
+          script: |
+            set -euo pipefail
+            APP_DIR="${{ secrets.VPS_APP_DIR }}"
+            REPO_URL="https://github.com/${{ github.repository }}.git"
+            REPO_SYNC_LOCK="/tmp/devops-tutorial-repo-sync.lock"
+
+            exec 8>"$REPO_SYNC_LOCK"
+            flock 8
+
+            if ! command -v git >/dev/null 2>&1; then
+              echo "git is not installed on the VPS."
+              exit 1
+            fi
+
+            mkdir -p "$(dirname "$APP_DIR")"
+
+            if [ ! -d "$APP_DIR/.git" ]; then
+              if [ -d "$APP_DIR" ] && [ -n "$(ls -A "$APP_DIR" 2>/dev/null)" ]; then
+                echo "VPS_APP_DIR exists but is not a git repository: $APP_DIR"
+                echo "Please use an empty directory or a valid cloned repository path."
+                exit 1
+              fi
+              echo "First deploy detected. Cloning repository to $APP_DIR"
+              git clone --branch "$DEPLOY_GIT_REF" --single-branch "$REPO_URL" "$APP_DIR"
+            fi
+
+            cd "$APP_DIR"
+            git fetch --all --prune
+            git checkout "$DEPLOY_GIT_REF"
+            git pull --ff-only origin "$DEPLOY_GIT_REF"
+
+            mkdir -p ops
+            if [ ! -f "ops/.env.${DEPLOY_ENV}" ]; then
+              cp "ops/.env.${DEPLOY_ENV}.example" "ops/.env.${DEPLOY_ENV}"
+            fi
+
+            if grep -q '^IMAGE_TAG=' "ops/.env.${DEPLOY_ENV}"; then
+              sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=${DEPLOY_IMAGE_TAG}/" "ops/.env.${DEPLOY_ENV}"
+            else
+              echo "IMAGE_TAG=${DEPLOY_IMAGE_TAG}" >> "ops/.env.${DEPLOY_ENV}"
+            fi
+
+            if grep -q '^DOCKERHUB_USERNAME=' "ops/.env.${DEPLOY_ENV}"; then
+              sed -i "s/^DOCKERHUB_USERNAME=.*/DOCKERHUB_USERNAME=${DOCKERHUB_USERNAME}/" "ops/.env.${DEPLOY_ENV}"
+            else
+              echo "DOCKERHUB_USERNAME=${DOCKERHUB_USERNAME}" >> "ops/.env.${DEPLOY_ENV}"
+            fi
+
+            DEPLOY_ENV="$DEPLOY_ENV" ./ops/deploy.sh
