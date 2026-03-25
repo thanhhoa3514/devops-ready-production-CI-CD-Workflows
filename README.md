@@ -116,6 +116,7 @@ Actions:
   - `docker compose pull`
   - `docker compose up -d --remove-orphans --force-recreate`
   - health check wait
+  - auto rollback to previous image tag if health check fails
 
 ## Deployment Commands (Manual)
 
