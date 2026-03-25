@@ -1,0 +1,66 @@
+name: Cleanup Docker Hub Tags
+
+on:
+  schedule:
+    - cron: '15 3 * * 0'
+  workflow_dispatch:
+    inputs:
+      keep_sha_tags:
+        description: Number of newest sha-* tags to keep
+        required: false
+        default: '10'
+      dry_run:
+        description: Preview only without deleting tags
+        required: false
+        type: boolean
+        default: true
+      protected_tags:
+        description: Comma-separated sha-* tags to protect from deletion
+        required: false
+        default: ''
+
+env:
+  IMAGE_NAME: devops-tutorial
+  DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+
+concurrency:
+  group: cleanup-dockerhub-tags
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate Docker Hub cleanup configuration
+        run: |
+          if [ -z "${DOCKERHUB_USERNAME}" ]; then
+            echo "Repository variable DOCKERHUB_USERNAME is required."
+            exit 1
+          fi
+
+          if [ -z "${{ secrets.DOCKERHUB_DELETE_TOKEN }}" ]; then
+            echo "Repository secret DOCKERHUB_DELETE_TOKEN is required."
+            exit 1
+          fi
+
+      - name: Skip disabled scheduled cleanup
+        if: ${{ github.event_name == 'schedule' && vars.DOCKERHUB_CLEANUP_ENABLED != 'true' }}
+        run: |
+          echo "Scheduled Docker Hub cleanup is disabled."
+          echo "Set repository variable DOCKERHUB_CLEANUP_ENABLED=true after validating a manual dry run."
+
+      - name: Cleanup stale sha-* tags
+        if: ${{ github.event_name != 'schedule' || vars.DOCKERHUB_CLEANUP_ENABLED == 'true' }}
+        env:
+          DOCKERHUB_REPOSITORY: ${{ env.IMAGE_NAME }}
+          DOCKERHUB_DELETE_TOKEN: ${{ secrets.DOCKERHUB_DELETE_TOKEN }}
+          KEEP_SHA_TAGS: ${{ github.event.inputs.keep_sha_tags || '10' }}
+          PROTECTED_TAGS: ${{ github.event.inputs.protected_tags || vars.DOCKERHUB_PROTECTED_TAGS || '' }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run || 'false' }}
+        run: ./ops/cleanup-dockerhub-tags.sh

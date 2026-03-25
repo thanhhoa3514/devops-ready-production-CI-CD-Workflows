@@ -17,6 +17,7 @@ This repository is configured for a production deployment flow:
   - `.github/workflows/test.yaml`
   - `.github/workflows/build.yaml`
   - `.github/workflows/deploy.yaml`
+  - `.github/workflows/cleanup-dockerhub.yaml`
 
 ## Local Development
 
@@ -70,10 +71,13 @@ Manual deploy on VPS:
 Set repository **Variables**:
 
 - `DOCKERHUB_USERNAME`: your Docker Hub username
+- `DOCKERHUB_CLEANUP_ENABLED`: set to `true` only after validating a manual cleanup dry run
+- `DOCKERHUB_PROTECTED_TAGS`: optional comma-separated `sha-*` tags to never delete
 
 Set repository **Secrets**:
 
 - `DOCKERHUB_TOKEN`: Docker Hub access token
+- `DOCKERHUB_DELETE_TOKEN`: Docker Hub PAT with `Delete` permission for cleanup workflow
 - `VPS_HOST`: VPS host/IP
 - `VPS_USER`: SSH username
 - `VPS_SSH_KEY`: private key for SSH login
@@ -116,7 +120,26 @@ Actions:
   - `docker compose pull`
   - `docker compose up -d --remove-orphans --force-recreate`
   - health check wait
-  - auto rollback to previous image tag if health check fails
+
+### 4) Docker Hub Cleanup Workflow (`cleanup-dockerhub.yaml`)
+
+Runs weekly on Sunday at `03:15 UTC` and can also be started manually.
+The scheduled run is skipped until `DOCKERHUB_CLEANUP_ENABLED=true`.
+
+Behavior:
+
+- Keeps `latest` and release tags like `v1.2.3` untouched
+- Only evaluates tags matching `sha-*`
+- Sorts `sha-*` tags by `last_updated`
+- Keeps the newest `10` by default
+- Skips any tags listed in `DOCKERHUB_PROTECTED_TAGS`
+- Deletes older `sha-*` tags through Docker Hub API v2
+
+Manual run options:
+
+- `keep_sha_tags`: override how many `sha-*` tags to keep
+- `dry_run`: preview deletions without removing tags
+- `protected_tags`: comma-separated `sha-*` tags to exclude from cleanup
 
 ## Deployment Commands (Manual)
 
@@ -138,3 +161,5 @@ sed -i 's/^IMAGE_TAG=.*/IMAGE_TAG=sha-<commit_sha>/' ops/.env.production
 
 - Keep `ops/.env.production` only on VPS. Do not commit real secrets.
 - If using a reverse proxy (Nginx/Caddy), map external 80/443 to `APP_PORT`.
+- Use a separate Docker Hub PAT for cleanup if you do not want to give delete scope to the build token.
+- Keep enough `sha-*` tags to cover your rollback window, or pin important ones in `DOCKERHUB_PROTECTED_TAGS`.
