@@ -2,10 +2,8 @@ name: Notify on Discord
 
 on:
   workflow_run:
-    workflows: ["Deploy To VPS"]
+    workflows: ["Deploy To Dev", "Deploy To Staging", "Deploy To Production"]
     types: [completed]
-    branches:
-      - main
 
 jobs:
   notify:
@@ -21,6 +19,7 @@ jobs:
       - name: Send Discord notification
         env:
           STATUS: ${{ github.event.workflow_run.conclusion }}
+          WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
           REPO: ${{ github.repository }}
           BRANCH: ${{ github.event.workflow_run.head_branch }}
           SHA: ${{ github.event.workflow_run.head_sha }}
@@ -43,7 +42,7 @@ jobs:
           {
             "embeds": [
               {
-                "title": "Deploy To VPS: ${STATUS_TEXT}",
+                "title": "${WORKFLOW_NAME}: ${STATUS_TEXT}",
                 "color": ${COLOR},
                 "fields": [
                   { "name": "Repository", "value": "${REPO}", "inline": true },

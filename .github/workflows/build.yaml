@@ -5,7 +5,12 @@ on:
     workflows: ["Lint"]
     types: [completed]
     branches:
+      - develop
+      - staging
       - main
+  push:
+    tags:
+      - 'v*.*.*'
 
 env:
   IMAGE_NAME: devops-tutorial
@@ -13,19 +18,29 @@ env:
 
 jobs:
   build-and-push:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name == 'push' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
       - name: Validate Docker Hub username variable
         run: |
           if [ -z "${DOCKERHUB_USERNAME}" ]; then
             echo "Repository variable DOCKERHUB_USERNAME is required."
             exit 1
+          fi
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            case "${{ github.event.workflow_run.head_branch }}" in
+              develop|staging|main)
+                ;;
+              *)
+                echo "Unsupported workflow_run branch: ${{ github.event.workflow_run.head_branch }}"
+                exit 1
+                ;;
+            esac
           fi
 
       - name: Setup pnpm

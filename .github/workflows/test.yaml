@@ -4,9 +4,9 @@ on:
   pull_request:
   push:
     branches:
+      - develop
+      - staging
       - main
-      - dev
-      - test
       - hotfix/**
       - feature/**
   workflow_dispatch:
